@@ -113,7 +113,7 @@ const Scraper = () => {
     setShowSuggestions(false);
 
     try {
-      const response = await fetch(`http://localhost:5000/scrape?query=${encodeURIComponent(queryToUse)}`);
+      const response = await fetch(`https://scraper-master-5.onrender.com/scrape?query=${encodeURIComponent(queryToUse)}`);
       const data = await response.json();
       
       if (!response.ok) {
