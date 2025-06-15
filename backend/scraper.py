@@ -14,6 +14,7 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
     base_url = f"https://www.amazon.in/s?k={search_term.replace(' ', '+')}"
     results = []
     products_scraped = 0
+    max_retries = 3
 
     for page in range(1, max_pages + 1):
         if products_scraped >= max_products:
@@ -27,21 +28,36 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Connection': 'keep-alive',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
         }
         
         logging.info(f"Fetching page {page}: {url}")
         
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            logging.error(f"Failed to fetch page {page}: {str(e)}")
-            continue
+        for retry in range(max_retries):
+            try:
+                response = requests.get(url, headers=headers, timeout=15)
+                response.raise_for_status()
+                
+                if "Robot Check" in response.text or "captcha" in response.text.lower():
+                    raise Exception("Amazon detected automated access. Please try again later.")
+                
+                break
+            except requests.RequestException as e:
+                if retry == max_retries - 1:
+                    logging.error(f"Failed to fetch page {page} after {max_retries} attempts: {str(e)}")
+                    raise
+                logging.warning(f"Retry {retry + 1}/{max_retries} for page {page}")
+                time.sleep(random.uniform(3, 5))  # Increased delay between retries
 
         time.sleep(random.uniform(2, 4))  # Reduced delay for faster scraping
 
         soup = BeautifulSoup(response.content, "html.parser")
         products = soup.select('div.s-main-slot div[data-component-type="s-search-result"]')
+
+        if not products:
+            logging.warning(f"No products found on page {page}")
+            break
 
         for product in products:
             if products_scraped >= max_products:
@@ -58,6 +74,9 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
                 availability_tag = product.select_one('span.a-color-success')
                 prime_tag = product.select_one('i.a-icon-prime')
                 discount_tag = product.select_one('span.a-badge-text')
+
+                if not name_tag or not price_tag:
+                    continue  # Skip products with missing essential information
 
                 product_data = {
                     'name': name_tag.text.strip() if name_tag else 'N/A',
@@ -82,6 +101,9 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
                 continue
 
         logging.info(f"Completed page {page}, total products scraped: {products_scraped}")
+
+    if not results:
+        raise Exception("No products found. Amazon might be blocking the request.")
 
     logging.info(f"Scraping completed. Total products collected: {len(results)}")
     return results

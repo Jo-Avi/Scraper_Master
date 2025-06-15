@@ -3,6 +3,7 @@ from flask_cors import CORS
 from scraper import scrape_amazon
 import os
 import logging
+import requests
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -25,11 +26,17 @@ def scrape():
         return jsonify({"error": "Query is required"}), 400
     try:
         results = scrape_amazon(query)
+        if not results:
+            logger.warning("No results found")
+            return jsonify({"error": "No products found for the given query"}), 404
         logger.info(f"Successfully scraped {len(results)} products")
         return jsonify(results)
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error during scraping: {str(e)}")
+        return jsonify({"error": f"Network error: {str(e)}"}), 503
     except Exception as e:
         logger.error(f"Error during scraping: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": f"Scraping error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))

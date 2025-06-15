@@ -113,16 +113,23 @@ const Scraper = () => {
     setShowSuggestions(false);
 
     try {
-      const response = await fetch(`https://scraper-master-5.onrender.com/scrape?query=${encodeURIComponent(queryToUse)}`);
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://scraper-master-5.onrender.com';
+      const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}`);
       const data = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch products');
+        throw new Error(data.error || `Server error: ${response.status}`);
+      }
+
+      if (!data || data.length === 0) {
+        setError('No products found for your search query');
+        return;
       }
 
       setProducts(data);
     } catch (err: any) {
-      setError('Failed to fetch products. Please check if the backend server is running.');
+      const errorMessage = err.message || 'Failed to fetch products';
+      setError(errorMessage);
       console.error('Error:', err);
     } finally {
       setLoading(false);
