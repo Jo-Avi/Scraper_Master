@@ -7,5 +7,6 @@ export default defineConfig({
     host: true,
   },
 
+  base: '/',
   plugins: [react()],
 }) 
