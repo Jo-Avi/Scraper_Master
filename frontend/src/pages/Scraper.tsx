@@ -113,7 +113,7 @@ const Scraper = () => {
     setShowSuggestions(false);
 
     try {
-      const apiUrl = 'http://localhost:10000';  // Hardcoding the backend URL for now
+      const apiUrl = 'https://scraper-master-5.onrender.com';  // Hardcoding the backend URL for now
       const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}`);
       const data = await response.json();
       
