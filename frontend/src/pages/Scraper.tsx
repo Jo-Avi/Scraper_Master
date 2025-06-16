@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, ShoppingCart, Star, ExternalLink, Zap, Package, AlertCircle, Loader2, TrendingUp, Filter, Grid, List, Eye, Heart, Share2, Download } from 'lucide-react';
 
 interface Product {
@@ -26,7 +26,21 @@ const Scraper = () => {
   const [searchSuggestions] = useState(['iPhone 15', 'MacBook Pro', 'Sony Headphones', 'Samsung TV', 'Nike Shoes', 'Gaming Chair']);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [currentSuggestion, setCurrentSuggestion] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const searchRef = useRef(null);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastProductRef = useCallback((node: HTMLDivElement) => {
+    if (loading || isLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        loadMoreProducts();
+      }
+    });
+    if (node) observer.current.observe(node);
+  }, [loading, hasMore, isLoadingMore]);
 
   const loadingSteps = [
     {
@@ -111,28 +125,59 @@ const Scraper = () => {
     setProducts([]);
     setAnimatedProducts([]);
     setShowSuggestions(false);
+    setCurrentPage(1);
+    setHasMore(true);
 
     try {
-      const apiUrl = 'https://scraper-master-5.onrender.com';  // Hardcoding the backend URL for now
-      const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}`);
+      const apiUrl = 'https://scraper-master-5.onrender.com';
+      const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}&page=1&limit=15`);
       const data = await response.json();
       
       if (!response.ok) {
         throw new Error(data.error || `Server error: ${response.status}`);
       }
 
-      if (!data || data.length === 0) {
+      if (!data.products || data.products.length === 0) {
         setError('No products found for your search query');
         return;
       }
 
-      setProducts(data);
+      setProducts(data.products);
+      setHasMore(data.hasMore);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch products';
       setError(errorMessage);
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreProducts = async () => {
+    if (isLoadingMore || !hasMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const apiUrl = 'https://scraper-master-5.onrender.com';
+      const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(query)}&page=${nextPage}&limit=15`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server error: ${response.status}`);
+      }
+
+      if (data.products && data.products.length > 0) {
+        setProducts(prevProducts => [...prevProducts, ...data.products]);
+        setCurrentPage(nextPage);
+        setHasMore(data.hasMore);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err: any) {
+      console.error('Error loading more products:', err);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -464,7 +509,8 @@ const Scraper = () => {
             }>
               {processedProducts.map((product, index) => (
                 <div
-                  key={index}
+                  key={`${product.name}-${index}`}
+                  ref={index === processedProducts.length - 1 ? lastProductRef : null}
                   className={`group relative transition-all duration-500 ${
                     animatedProducts.includes(index) 
                       ? 'opacity-100 translate-y-0' 
@@ -618,6 +664,12 @@ const Scraper = () => {
                 </div>
               ))}
             </div>
+
+            {isLoadingMore && (
+              <div className="flex justify-center mt-8">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+              </div>
+            )}
           </div>
         )}
 

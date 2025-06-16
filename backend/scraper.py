@@ -16,7 +16,7 @@ USER_AGENTS = [
     'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
 ]
 
-def scrape_amazon(search_term, max_products=100, max_pages=20):
+def scrape_amazon(search_term, max_products=100, max_pages=20, start_page=1):
     """
     Scrape Amazon products with enhanced details and better error handling
     """
@@ -25,7 +25,7 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
     products_scraped = 0
     max_retries = 5  # Increased retries
 
-    for page in range(1, max_pages + 1):
+    for page in range(start_page, start_page + max_pages):
         if products_scraped >= max_products:
             logging.info(f"Reached target of {max_products} products")
             break
