@@ -125,25 +125,22 @@ const Scraper = () => {
     setProducts([]);
     setAnimatedProducts([]);
     setShowSuggestions(false);
-    setCurrentPage(1);
-    setHasMore(true);
 
     try {
-      const apiUrl = 'https://scraper-master-5.onrender.com';
-      const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}&page=1&limit=15`);
+      const apiUrl = 'https://scraper-master-5.onrender.com';  // Hardcoding the backend URL for now
+      const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}`);
       const data = await response.json();
       
       if (!response.ok) {
         throw new Error(data.error || `Server error: ${response.status}`);
       }
 
-      if (!data.products || data.products.length === 0) {
+      if (!data || data.length === 0) {
         setError('No products found for your search query');
         return;
       }
 
-      setProducts(data.products);
-      setHasMore(data.hasMore);
+      setProducts(data);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch products';
       setError(errorMessage);
@@ -509,8 +506,7 @@ const Scraper = () => {
             }>
               {processedProducts.map((product, index) => (
                 <div
-                  key={`${product.name}-${index}`}
-                  ref={index === processedProducts.length - 1 ? lastProductRef : null}
+                  key={index}
                   className={`group relative transition-all duration-500 ${
                     animatedProducts.includes(index) 
                       ? 'opacity-100 translate-y-0' 

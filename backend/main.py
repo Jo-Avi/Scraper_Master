@@ -21,24 +21,16 @@ def home():
 def scrape():
     logger.info(f"Scrape endpoint accessed with query: {request.args.get('query', '')}")
     query = request.args.get('query', '')
-    page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 15))
-    
     if not query:
         logger.warning("No query provided")
         return jsonify({"error": "Query is required"}), 400
     try:
-        results = scrape_amazon(query, max_products=limit, start_page=page)
+        results = scrape_amazon(query)
         if not results:
             logger.warning("No results found")
             return jsonify({"error": "No products found for the given query"}), 404
         logger.info(f"Successfully scraped {len(results)} products")
-        return jsonify({
-            "products": results,
-            "page": page,
-            "limit": limit,
-            "hasMore": len(results) == limit
-        })
+        return jsonify(results)
     except requests.exceptions.RequestException as e:
         logger.error(f"Network error during scraping: {str(e)}")
         return jsonify({"error": f"Network error: {str(e)}"}), 503
