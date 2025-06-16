@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from scraper import scrape_amazon
+from scraper_with_api import scrape_amazon
 import os
 import logging
 import requests

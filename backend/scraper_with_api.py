@@ -1,29 +1,62 @@
-import requests # Import the requests library
+import requests
 from bs4 import BeautifulSoup
 import time
 import random
 import logging
+from api_config import *
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# List of User-Agents to randomize
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
-]
+def get_random_headers():
+    """Get random headers with a random User-Agent"""
+    headers = DEFAULT_HEADERS.copy()
+    headers['User-Agent'] = random.choice(USER_AGENTS)
+    return headers
+
+def exponential_backoff(attempt):
+    """Calculate delay with exponential backoff"""
+    delay = min(SCRAPING_CONFIG['initial_delay'] * (SCRAPING_CONFIG['backoff_factor'] ** attempt),
+                SCRAPING_CONFIG['max_delay'])
+    return delay + random.uniform(0, 1)
+
+def make_request(url, method='get', **kwargs):
+    """Make a request with retry logic and exponential backoff"""
+    headers = get_random_headers()
+    kwargs['headers'] = headers
+    kwargs['timeout'] = SCRAPING_CONFIG['timeout']
+
+    for attempt in range(SCRAPING_CONFIG['max_retries']):
+        try:
+            if method.lower() == 'get':
+                response = requests.get(url, **kwargs)
+            else:
+                response = requests.post(url, **kwargs)
+
+            if response.status_code == 200:
+                return response
+            elif response.status_code == 503:
+                logging.warning(f"Service unavailable (503) on attempt {attempt + 1}")
+            else:
+                logging.error(f"Request failed with status code {response.status_code} on attempt {attempt + 1}")
+
+        except requests.RequestException as e:
+            logging.error(f"Request failed on attempt {attempt + 1}: {str(e)}")
+
+        if attempt < SCRAPING_CONFIG['max_retries'] - 1:
+            delay = exponential_backoff(attempt)
+            logging.info(f"Waiting {delay:.2f} seconds before retry {attempt + 2}")
+            time.sleep(delay)
+
+    return None
 
 def scrape_amazon(search_term, max_products=100, max_pages=20):
     """
-    Scrape Amazon products with enhanced details and better error handling
+    Scrape Amazon products with enhanced reliability
     """
     base_url = f"https://www.amazon.in/s?k={search_term.replace(' ', '+')}"
     results = []
     products_scraped = 0
-    max_retries = 5  # Increased retries
 
     for page in range(1, max_pages + 1):
         if products_scraped >= max_products:
@@ -31,35 +64,18 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
             break
 
         url = base_url + f"&page={page}"
-        
-        headers = {
-            'User-Agent': random.choice(USER_AGENTS),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Connection': 'keep-alive',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-        }
-        
         logging.info(f"Fetching page {page}: {url}")
+
+        # Try direct request first
+        response = make_request(url)
         
-        for retry in range(max_retries):
-            try:
-                # Add a random delay before each request
-                time.sleep(random.uniform(2, 6))
-                response = requests.get(url, headers=headers, timeout=20)
-                response.raise_for_status()
-                
-                if "Robot Check" in response.text or "captcha" in response.text.lower():
-                    raise Exception("Amazon detected automated access. Please try again later.")
-                
-                break
-            except requests.RequestException as e:
-                if retry == max_retries - 1:
-                    logging.error(f"Failed to fetch page {page} after {max_retries} attempts: {str(e)}")
-                    raise
-                logging.warning(f"Retry {retry + 1}/{max_retries} for page {page}")
-                time.sleep(random.uniform(5, 10))  # Increased delay between retries
+        if not response:
+            logging.error(f"Failed to fetch page {page}")
+            continue
+
+        if "Robot Check" in response.text or "captcha" in response.text.lower():
+            logging.error("Amazon detected automated access")
+            continue
 
         soup = BeautifulSoup(response.content, "html.parser")
         products = soup.select('div.s-main-slot div[data-component-type="s-search-result"]')
@@ -85,7 +101,7 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
                 discount_tag = product.select_one('span.a-badge-text')
 
                 if not name_tag or not price_tag:
-                    continue  # Skip products with missing essential information
+                    continue
 
                 product_data = {
                     'name': name_tag.text.strip() if name_tag else 'N/A',
@@ -109,10 +125,11 @@ def scrape_amazon(search_term, max_products=100, max_pages=20):
                 logging.error(f"Error processing product: {str(e)}")
                 continue
 
-        logging.info(f"Completed page {page}, total products scraped: {products_scraped}")
+        # Add random delay between pages
+        time.sleep(random.uniform(3, 5))
 
     if not results:
         raise Exception("No products found. Amazon might be blocking the request.")
 
     logging.info(f"Scraping completed. Total products collected: {len(results)}")
-    return results
+    return results 

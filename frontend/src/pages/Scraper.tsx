@@ -113,7 +113,7 @@ const Scraper = () => {
     setShowSuggestions(false);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://scraper-master-5.onrender.com';
+      const apiUrl = 'http://localhost:10000';  // Hardcoding the backend URL for now
       const response = await fetch(`${apiUrl}/scrape?query=${encodeURIComponent(queryToUse)}`);
       const data = await response.json();
       
